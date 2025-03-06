@@ -1,0 +1,99 @@
+{
+    "name": "compressed-files-visualizer",
+    "displayName": "Compressed Files Visualizer",
+    "description": "View compressed files directly in VS Code",
+    "version": "1.0.0",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/yourusername/compressed-files-visualizer.git"
+    },
+    "publisher": "yourusername",
+    "engines": {
+        "vscode": "^1.60.0"
+    },
+    "categories": [
+        "Other"
+    ],
+    "activationEvents": [
+        "onCommand:compressedViewer.openCompressedFile",
+        "onCustomEditor:compressedViewer.json"
+    ],
+    "main": "out/extension.js",
+    "contributes": {
+        "commands": [
+            {
+                "command": "compressedViewer.openCompressedFile",
+                "title": "Open with Compressed Files Visualizer"
+            }
+        ],
+        "menus": {
+            "explorer/context": [
+                {
+                    "when": "resourceExtname == .br",
+                    "command": "compressedViewer.openCompressedFile",
+                    "group": "navigation"
+                }
+            ],
+            "editor/title/context": [
+                {
+                    "when": "resourceExtname == .br",
+                    "command": "compressedViewer.openCompressedFile",
+                    "group": "navigation"
+                }
+            ]
+        },
+        "languages": [
+            {
+                "id": "compressed",
+                "extensions": [
+                    ".br"
+                ],
+                "aliases": [
+                    "Brotli Compressed"
+                ]
+            }
+        ],
+        "resourceLabelFormatters": [
+            {
+                "scheme": "compressed",
+                "formatting": {
+                    "label": "${path}",
+                    "separator": "/",
+                    "workspaceSuffix": "Brotli",
+                    "icon": "$(file-binary)"
+                }
+            }
+        ],
+        "customEditors": [
+            {
+                "viewType": "compressedViewer.json",
+                "displayName": "Compressed JSON Viewer",
+                "selector": [
+                    {
+                        "filenamePattern": "*.json.br"
+                    }
+                ],
+                "priority": "default"
+            }
+        ]
+    },
+    "scripts": {
+        "clean": "rimraf out",
+        "prebuild": "npm run clean",
+        "vscode:prepublish": "npm run compile",
+        "compile": "tsc -p ./",
+        "watch": "tsc -watch -p ./",
+        "prepackage": "mkdir -p out && ls -la out/",
+        "package": "vsce package"
+    },
+    "devDependencies": {
+        "@types/node": "^16.0.0",
+        "@types/vscode": "^1.60.0",
+        "typescript": "^4.5.0",
+        "@vscode/vsce": "^2.15.0",
+        "rimraf": "^5.0.1"
+    },
+    "dependencies": {
+        "monaco-editor": "^0.36.0"
+    }
+}
