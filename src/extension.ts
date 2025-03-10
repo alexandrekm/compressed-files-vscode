@@ -34,7 +34,39 @@ export class BrotliEditorProvider implements vscode.CustomReadonlyEditorProvider
     openContext: vscode.CustomDocumentOpenContext,
     token: vscode.CancellationToken
   ): Promise<vscode.CustomDocument> {
-    outputChannel.appendLine(`Opening document: ${uri.fsPath}`);
+    const fileName = path.basename(uri.fsPath);
+    outputChannel.appendLine(`\n📂 Opening compressed file: ${fileName}`);
+    outputChannel.appendLine(`Full path: ${uri.fsPath}`);
+    
+    try {
+      // Read the compressed file to calculate and show size information immediately
+      const compressedData = await fs.promises.readFile(uri.fsPath);
+      const fileStats = await fs.promises.stat(uri.fsPath);
+      
+      outputChannel.appendLine(`Compressed size: ${this.formatFileSize(compressedData.length)} (${compressedData.length} bytes)`);
+      outputChannel.appendLine(`Last modified: ${fileStats.mtime.toLocaleString()}`);
+      
+      // Try to decompress to calculate compression ratio
+      try {
+        const decompressedBuffer = Buffer.from(brotli.decompress(compressedData));
+        const compressionRatio = ((1 - (compressedData.length / decompressedBuffer.length)) * 100).toFixed(1);
+        
+        // Highlight the compression percentage 
+        outputChannel.appendLine(`✅ Compression ratio: ${compressionRatio}% (reduced by ${this.formatFileSize(decompressedBuffer.length - compressedData.length)})`);
+        
+        // Update status bar with compression info
+        if (statusBarItem) {
+          statusBarItem.text = `$(file-binary) ${fileName} (${compressionRatio}%)`;
+          statusBarItem.tooltip = `Brotli compressed file: ${uri.fsPath}\nCompression: ${compressionRatio}%`;
+          statusBarItem.show();
+        }
+      } catch (error) {
+        outputChannel.appendLine(`⚠️ Could not calculate compression ratio: ${error}`);
+      }
+    } catch (error) {
+      outputChannel.appendLine(`⚠️ Error getting file information: ${error}`);
+    }
+    
     return { uri, dispose: () => {} };
   }
 
@@ -109,9 +141,28 @@ export class BrotliEditorProvider implements vscode.CustomReadonlyEditorProvider
   private updateStatusBar(filePath: string) {
     if (statusBarItem) {
       const fileName = path.basename(filePath);
-      statusBarItem.text = `$(file-binary) ${fileName}`;
-      statusBarItem.tooltip = `Brotli compressed file: ${filePath}`;
-      statusBarItem.show();
+      
+      // Try to read file and calculate compression percentage
+      fs.promises.readFile(filePath).then(compressedData => {
+        try {
+          const decompressedBuffer = Buffer.from(brotli.decompress(compressedData));
+          const compressionRatio = ((1 - (compressedData.length / decompressedBuffer.length)) * 100).toFixed(1);
+          
+          // Update status bar with compression info
+          statusBarItem.text = `$(file-binary) ${fileName} (${compressionRatio}%)`;
+          statusBarItem.tooltip = `Brotli compressed file: ${filePath}\nCompression: ${compressionRatio}%`;
+        } catch {
+          // Fall back to simple display if decompression fails
+          statusBarItem.text = `$(file-binary) ${fileName}`;
+          statusBarItem.tooltip = `Brotli compressed file: ${filePath}`;
+        }
+        statusBarItem.show();
+      }).catch(() => {
+        // Fall back to simple display if file read fails
+        statusBarItem.text = `$(file-binary) ${fileName}`;
+        statusBarItem.tooltip = `Brotli compressed file: ${filePath}`;
+        statusBarItem.show();
+      });
     }
   }
   
@@ -353,11 +404,28 @@ export class BrotliEditorProvider implements vscode.CustomReadonlyEditorProvider
       .replace(/"/g, '&quot;')
       .replace(/'/g, '&#039;');
   }
+
+  // Helper method to format file size
+  private formatFileSize(bytes: number): string {
+    if (bytes < 1024) {
+      return `${bytes} B`;
+    } else if (bytes < 1024 * 1024) {
+      return `${(bytes / 1024).toFixed(1)} KB`;
+    } else if (bytes < 1024 * 1024 * 1024) {
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    } else {
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+    }
+  }
 }
 
 export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel('Compressed Files Visualizer');
-  outputChannel.appendLine('Extension activated');
+  
+  const extensionDetails = vscode.extensions.getExtension('compressedFilesVisualizer');
+  const version = extensionDetails?.packageJSON.version || 'unknown';
+  outputChannel.appendLine(`Compressed Files Visualizer v${version} activated`);
+  outputChannel.appendLine(`Working directory: ${vscode.workspace.workspaceFolders?.[0]?.uri.fsPath || 'No workspace folder'}`);
   
   // Create status bar item
   statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -373,6 +441,7 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(showLogsCommand);
   
   outputChannel.appendLine('Extension initialization complete');
+  outputChannel.show(); // Show the output channel when extension is activated
 }
 
 export function deactivate() {
